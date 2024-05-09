@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { TransactionsRepository } from './transactions.repository';
@@ -25,6 +25,14 @@ export class TransactionsService {
   async transferToSpending(
     createTransactionDto: CreateTransactionDto,
   ): Promise<Transaction> {
+    // 잔액 확인
+    const userBalance = await this.transactionsRepository.getBalance(
+      createTransactionDto.userId,
+    );
+    if (userBalance < createTransactionDto.amount) {
+      throw new BadRequestException('잔액 부족: 충분한 Klay가 없습니다.');
+    }
+
     const blockchainResponse =
       await this.mockBlockchainTransaction(createTransactionDto);
     if (blockchainResponse.status === 'Committed') {
@@ -39,6 +47,14 @@ export class TransactionsService {
   async transferToWallet(
     createTransactionDto: CreateTransactionDto,
   ): Promise<Transaction> {
+    // 잔액 확인
+    const userBalance = await this.transactionsRepository.getBalance(
+      createTransactionDto.userId,
+    );
+    if (userBalance < createTransactionDto.amount) {
+      throw new BadRequestException('잔액 부족: 충분한 Klay가 없습니다.');
+    }
+
     const blockchainResponse =
       await this.mockBlockchainTransaction(createTransactionDto);
     if (blockchainResponse.status === 'Committed') {

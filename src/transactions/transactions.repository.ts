@@ -1,8 +1,8 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { QueryRunner, Repository, Connection } from 'typeorm';
 import { Transaction } from './entities/transaction.entity';
 import { CoinLog } from './entities/coin-log.entity';
 import { Coin } from './entities/coin.entity';
-import { Injectable } from '@nestjs/common';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { InjectConnection, InjectRepository } from '@nestjs/typeorm';
 
@@ -92,5 +92,11 @@ export class TransactionsRepository {
       amountChanged,
     });
     await queryRunner.manager.save(coinLog);
+  }
+
+  async getBalance(userId: number): Promise<number> {
+    const coinRecord = await this.coinRepository.findOne({ where: { userId } });
+    if (!coinRecord) throw new NotFoundException('사용자가 존재하지 않습니다.');
+    return coinRecord.balance;
   }
 }
