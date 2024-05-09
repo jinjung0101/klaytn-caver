@@ -1,16 +1,10 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { UsersModule } from './users/users.module';
-import { WalletModule } from './wallet/wallet.module';
-import { SpendingModule } from './spending/spending.module';
 import { TransactionsModule } from './transactions/transactions.module';
 
 @Module({
   imports: [
-    UsersModule,
-    WalletModule,
-    SpendingModule,
     TransactionsModule,
     TypeOrmModule.forRootAsync({
       imports: [

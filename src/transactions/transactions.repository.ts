@@ -1,34 +1,96 @@
-import { Repository } from 'typeorm';
+import { QueryRunner, Repository, Connection } from 'typeorm';
 import { Transaction } from './entities/transaction.entity';
 import { CoinLog } from './entities/coin-log.entity';
 import { Coin } from './entities/coin.entity';
 import { Injectable } from '@nestjs/common';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
-import { CreateCoinLogDto } from './dto/create-coin-log.dto';
+import { InjectConnection, InjectRepository } from '@nestjs/typeorm';
 
 @Injectable()
-export class TransactionsRepository extends Repository<Transaction> {
+export class TransactionsRepository {
+  constructor(
+    @InjectRepository(CoinLog)
+    private coinLogRepository: Repository<CoinLog>,
+    @InjectRepository(Coin)
+    private coinRepository: Repository<Coin>,
+    @InjectRepository(Transaction)
+    private transactionRepository: Repository<Transaction>,
+    @InjectConnection()
+    private connection: Connection,
+  ) {}
+
   async createAndSaveTransaction(
-    transactionData: CreateTransactionDto,
+    createTransactionDto: CreateTransactionDto,
   ): Promise<Transaction> {
-    const transaction = this.create(transactionData);
-    return await this.save(transaction);
-  }
-
-  async createAndSaveCoinLog(coinLogData: CreateCoinLogDto): Promise<CoinLog> {
-    const coinLog = this.manager.create(CoinLog, coinLogData);
-    return await this.manager.save(coinLog);
-  }
-
-  async findAndUpdateCoin(userId: number, amount: number): Promise<Coin> {
-    let coin = await this.manager.findOne(Coin, { where: { userId: userId } });
-    if (!coin) {
-      coin = this.manager.create(Coin, {
-        userId: userId,
-        balance: 0,
-      });
+    const queryRunner = this.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    try {
+      const transaction = await this.createTransaction(
+        queryRunner,
+        createTransactionDto,
+      );
+      await this.updateAccountBalances(
+        queryRunner,
+        createTransactionDto.userId,
+        createTransactionDto.amount,
+        transaction,
+      );
+      await queryRunner.commitTransaction();
+      return transaction;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
-    coin.balance = Number(coin.balance) + amount; // `balance`가 decimal이므로, 적절한 타입 변환을 고려해야 합니다.
-    return await this.manager.save(coin);
+  }
+
+  private async createTransaction(
+    queryRunner: QueryRunner,
+    createTransactionDto: CreateTransactionDto,
+  ): Promise<Transaction> {
+    const transaction = queryRunner.manager.create(
+      Transaction,
+      createTransactionDto,
+    );
+    return await queryRunner.manager.save(transaction);
+  }
+
+  private async updateAccountBalances(
+    queryRunner: QueryRunner,
+    userId: number,
+    amount: number,
+    transaction: Transaction,
+  ): Promise<void> {
+    await this.updateCoinBalance(queryRunner, userId, amount);
+    await this.createCoinLog(queryRunner, userId, transaction, amount);
+  }
+
+  private async updateCoinBalance(
+    queryRunner: QueryRunner,
+    userId: number,
+    amount: number,
+  ): Promise<void> {
+    let coin = await this.coinRepository.findOne({ where: { userId } });
+    if (!coin) {
+      coin = this.coinRepository.create({ userId, balance: 0 });
+    }
+    coin.balance += amount;
+    await queryRunner.manager.save(coin);
+  }
+
+  private async createCoinLog(
+    queryRunner: QueryRunner,
+    userId: number,
+    transaction: Transaction,
+    amountChanged: number,
+  ): Promise<void> {
+    const coinLog = this.coinLogRepository.create({
+      userId,
+      transaction,
+      amountChanged,
+    });
+    await queryRunner.manager.save(coinLog);
   }
 }

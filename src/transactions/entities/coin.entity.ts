@@ -1,6 +1,13 @@
-import { Entity, PrimaryColumn, Column, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryColumn,
+  Column,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 
 @Entity()
+@Index(['userId'])
 export class Coin {
   @PrimaryColumn()
   userId: number;

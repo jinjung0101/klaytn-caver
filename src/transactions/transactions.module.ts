@@ -8,7 +8,14 @@ import { Transaction } from './entities/transaction.entity';
 import { TransactionsRepository } from './transactions.repository';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Coin, CoinLog, Transaction])],
+  imports: [
+    TypeOrmModule.forFeature([
+      Coin,
+      CoinLog,
+      Transaction,
+      TransactionsRepository,
+    ]),
+  ],
   controllers: [TransactionsController],
   providers: [TransactionsService, TransactionsRepository],
 })
