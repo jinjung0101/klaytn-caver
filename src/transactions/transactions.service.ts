@@ -11,14 +11,6 @@ export class TransactionsService {
     private transactionsRepository: TransactionsRepository,
   ) {}
 
-  async createTransaction(
-    createTransactionDto: CreateTransactionDto,
-  ): Promise<Transaction> {
-    return this.transactionsRepository.createAndSaveTransaction(
-      createTransactionDto,
-    );
-  }
-
   async mockBlockchainTransaction(
     dto: CreateTransactionDto,
   ): Promise<{ status: string; transactionHash: string }> {
