@@ -18,7 +18,7 @@ export class CoinLog {
   @ManyToOne(() => Transaction, (transaction) => transaction.id)
   transaction: Transaction;
 
-  @Column('decimal')
+  @Column('decimal', { precision: 18, scale: 8 })
   amountChanged: number;
 
   @CreateDateColumn()

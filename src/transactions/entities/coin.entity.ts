@@ -12,7 +12,7 @@ export class Coin {
   @PrimaryColumn()
   userId: number;
 
-  @Column('decimal')
+  @Column('decimal', { precision: 18, scale: 8 })
   balance: number;
 
   @UpdateDateColumn()

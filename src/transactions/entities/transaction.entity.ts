@@ -16,7 +16,7 @@ export class Transaction {
   @Column()
   toAddress: string;
 
-  @Column('decimal')
+  @Column('decimal', { precision: 18, scale: 8 })
   amount: number;
 
   @Column({ unique: true })

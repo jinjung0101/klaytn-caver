@@ -39,38 +39,39 @@
 #### 1. `Transaction`
 
 `Transaction` 테이블은 Klay 트랜잭션 데이터를 저장합니다. 트랜잭션에는 보내는 주소, 받는 주소, 금액, 트랜잭션 해시, 상태 등의 정보가 포함됩니다.
+블록체인 주소는 약 42자의 길이를 가지는 Ethereum 주소 형식을 따르며, 트랜잭션 해시는 66자의 길이를 가집니다. 이들은 각각 `VARCHAR(42)`와 `VARCHAR(66)`로 정의됩니다.
 
-| 필드명          | 타입        | 설명                                                    |
-| --------------- | ----------- | ------------------------------------------------------- |
-| id              | INT         | 트랜잭션의 고유 ID                                      |
-| fromAddress     | VARCHAR(42) | 보내는 주소                                             |
-| toAddress       | VARCHAR(42) | 받는 주소                                               |
-| amount          | DECIMAL     | 전송 금액                                               |
-| transactionHash | VARCHAR(66) | 트랜잭션 해시                                           |
-| status          | ENUM        | 트랜잭션 상태 ('Submitted', 'Committed', 'CommitError') |
-| createdAt       | DATETIME    | 생성 날짜                                               |
+| 필드명          | 타입          | 설명                                                    |
+| --------------- | ------------- | ------------------------------------------------------- |
+| id              | INT           | 트랜잭션의 고유 ID                                      |
+| fromAddress     | VARCHAR(42)   | 보내는 주소                                             |
+| toAddress       | VARCHAR(42)   | 받는 주소                                               |
+| amount          | DECIMAL(18,8) | 전송 금액, 소수점 이하 8자리까지 표현 가능              |
+| transactionHash | VARCHAR(66)   | 트랜잭션 해시                                           |
+| status          | ENUM          | 트랜잭션 상태 ('Submitted', 'Committed', 'CommitError') |
+| createdAt       | DATETIME      | 생성 날짜                                               |
 
 #### 2. `Coin`
 
-`Coin` 테이블은 사용자별 Klay 잔액을 관리합니다. 각 레코드는 사용자 ID와 해당 사용자의 Klay 잔액을 저장합니다.
+`Coin` 테이블은 사용자별 Klay 잔액을 관리합니다. 각 레코드는 사용자 ID와 해당 사용자의 Klay 잔액을 저장합니다. 금액은 `DECIMAL(18,8)`로 설정되어, 소수점 이하 8자리까지 정확한 값을 보장합니다.
 
-| 필드명    | 타입     | 설명               |
-| --------- | -------- | ------------------ |
-| userId    | INT      | 사용자 ID (PK)     |
-| balance   | DECIMAL  | Klay 잔액          |
-| updatedAt | DATETIME | 최종 업데이트 날짜 |
+| 필드명    | 타입          | 설명               |
+| --------- | ------------- | ------------------ |
+| userId    | INT           | 사용자 ID (PK)     |
+| balance   | DECIMAL(18,8) | Klay 잔액          |
+| updatedAt | DATETIME      | 최종 업데이트 날짜 |
 
 #### 3. `CoinLog`
 
 `CoinLog` 테이블은 Klay 잔액 변경 이력을 로깅합니다. 각 로그는 사용자 ID, 관련 트랜잭션 ID, 변경된 금액 등의 정보를 포함합니다.
 
-| 필드명        | 타입     | 설명                  |
-| ------------- | -------- | --------------------- |
-| id            | INT      | 로그의 고유 ID        |
-| userId        | INT      | 사용자 ID             |
-| transactionId | INT      | 관련 트랜잭션 ID (FK) |
-| amountChanged | DECIMAL  | 변경된 금액           |
-| createdAt     | DATETIME | 생성 날짜             |
+| 필드명        | 타입          | 설명                  |
+| ------------- | ------------- | --------------------- |
+| id            | INT           | 로그의 고유 ID        |
+| userId        | INT           | 사용자 ID             |
+| transactionId | INT           | 관련 트랜잭션 ID (FK) |
+| amountChanged | DECIMAL(18,8) | 변경된 금액           |
+| createdAt     | DATETIME      | 생성 날짜             |
 
 ### 관계
 
