@@ -4,10 +4,12 @@ import {
   Column,
   CreateDateColumn,
   ManyToOne,
+  Index,
 } from 'typeorm';
 import { Transaction } from './transaction.entity';
 
-@Entity()
+@Entity({ name: 'coin-logs' })
+@Index(['userId'])
 export class CoinLog {
   @PrimaryGeneratedColumn()
   id: number;

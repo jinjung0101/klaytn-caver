@@ -8,7 +8,7 @@
 
 ### Klay 전송
 
-- **POST** `/transactions/sendToSpending` 및 `/transactions/sendToWallet`
+- **POST** `/wallets/sendToSpending` 및 `/wallets/sendToWallet`
 - 사용자의 Wallet과 Spending 계정 간에 Klay를 전송합니다.
 - 요청 바디:
   - `fromAddress`: 보내는 계정의 주소
@@ -18,14 +18,14 @@
   - 성공 시: 트랜잭션 세부 정보
   - 실패 시: 오류 메시지
 
-### 잔액 조회
+### 거래내역 조회
 
-- **GET** `/coin/balance`
-- 특정 사용자의 Klay 잔액을 조회합니다.
+- **GET** `/coin-log/:userId`
+- 특정 사용자의 거래내역을 조회합니다.
 - 요청 파라미터:
   - `userId`: 사용자 ID
 - 응답:
-  - 성공 시: 사용자의 Klay 잔액
+  - 성공 시: 사용자의 거래내역
   - 실패 시: 오류 메시지
 
 ### 트랜잭션 로깅
@@ -82,9 +82,9 @@
 
 ### 트랜잭션 처리 흐름
 
-- 프런트엔드에서는 '스펜딩으로 보내기' 버튼을 클릭하면 `POST /transactions/sendToSpending` API를 호출합니다.
-- 이 API는 내부적으로 `TransactionsService`의 `transferToSpending` 메소드를 호출하여, 블록체인 네트워크를 통해 Klay를 전송하고 결과를 처리합니다.
-- 성공적으로 전송된 경우, 관련 트랜잭션 정보는 `TransactionsRepository`를 통해 데이터베이스에 저장됩니다. 동시에, 사용자의 Klay 잔액이 업데이트되고, 이 변경 사항은 `CoinLog`에 로깅됩니다.
+- 프런트엔드에서는 '스펜딩으로 보내기' 버튼을 클릭하면 `POST /wallets/sendToSpending` API를 호출합니다.
+- 이 API는 내부적으로 `WalletsService`의 `transferToSpending` 메소드를 호출하여, 블록체인 네트워크를 통해 Klay를 전송하고 결과를 처리합니다.
+- 성공적으로 전송된 경우, 관련 트랜잭션 정보는 `WalletsRepository`를 통해 데이터베이스에 저장됩니다. 동시에, 사용자의 Klay 잔액이 업데이트되고, 이 변경 사항은 `CoinLog`에 로깅됩니다.
 
 ### 동시성 관리
 

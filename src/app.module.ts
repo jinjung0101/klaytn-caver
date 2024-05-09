@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TransactionsModule } from './transactions/transactions.module';
+import { WalletsModule } from './wallet/wallets.module';
 
 @Module({
   imports: [
-    TransactionsModule,
+    WalletsModule,
     TypeOrmModule.forRootAsync({
       imports: [
         ConfigModule.forRoot({

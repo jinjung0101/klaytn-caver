@@ -6,7 +6,7 @@ import {
   Index,
 } from 'typeorm';
 
-@Entity()
+@Entity({ name: 'coins' })
 @Index(['userId'])
 export class Coin {
   @PrimaryColumn()

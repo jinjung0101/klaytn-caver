@@ -1,13 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { QueryRunner, Repository, Connection } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
+import { QueryRunner, Repository, DataSource } from 'typeorm';
 import { Transaction } from './entities/transaction.entity';
 import { CoinLog } from './entities/coin-log.entity';
 import { Coin } from './entities/coin.entity';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
-import { InjectConnection, InjectRepository } from '@nestjs/typeorm';
 
 @Injectable()
-export class TransactionsRepository {
+export class WalletsRepository {
   constructor(
     @InjectRepository(CoinLog)
     private coinLogRepository: Repository<CoinLog>,
@@ -15,14 +15,13 @@ export class TransactionsRepository {
     private coinRepository: Repository<Coin>,
     @InjectRepository(Transaction)
     private transactionRepository: Repository<Transaction>,
-    @InjectConnection()
-    private connection: Connection,
+    private dataSource: DataSource,
   ) {}
 
   async createAndSaveTransaction(
     createTransactionDto: CreateTransactionDto,
   ): Promise<Transaction> {
-    const queryRunner = this.connection.createQueryRunner();
+    const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
     try {
@@ -98,5 +97,11 @@ export class TransactionsRepository {
     const coinRecord = await this.coinRepository.findOne({ where: { userId } });
     if (!coinRecord) throw new NotFoundException('사용자가 존재하지 않습니다.');
     return coinRecord.balance;
+  }
+
+  async findCoinLogsByUserId(userId: number): Promise<CoinLog[]> {
+    return this.coinLogRepository.find({
+      where: { userId: userId },
+    });
   }
 }
