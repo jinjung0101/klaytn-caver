@@ -1,36 +1,34 @@
 import {
   Injectable,
   BadRequestException,
-  NotFoundException,
+  // NotFoundException,
 } from '@nestjs/common';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { WalletsRepository } from './wallets.repository';
 import { Transaction } from './entities/transaction.entity';
 import { CoinLog } from './entities/coin-log.entity';
+import { MockCaver } from 'src/utils/mocking-caver.utils';
 
 @Injectable()
 export class WalletsService {
   constructor(private readonly walletsRepository: WalletsRepository) {}
 
-  async mockBlockchainTransaction(
-    dto: CreateTransactionDto,
-  ): Promise<{ status: string; transactionHash: string }> {
-    // 네트워크 지연 및 트랜잭션 결과 시뮬레이션
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({ status: 'Committed', transactionHash: '0x...' });
-      }, 1000); // 1초 지연
-    });
-  }
-
-  private async handleBlockchainTransaction(
+  public async handleBlockchainTransaction(
     dto: CreateTransactionDto,
   ): Promise<Transaction> {
-    const blockchainResponse = await this.mockBlockchainTransaction(dto);
-    if (blockchainResponse.status === 'Committed') {
-      return this.walletsRepository.createAndSaveTransaction(dto);
+    const { status, transactionHash } = await MockCaver.transferKlay(
+      dto.fromAddress,
+      dto.toAddress,
+      dto.amount,
+    );
+    if (status === 'Committed') {
+      return this.walletsRepository.createAndSaveTransaction({
+        ...dto,
+        status,
+        transactionHash,
+      });
     } else {
-      throw new NotFoundException(`거래 실패: ${blockchainResponse.status}`);
+      throw new Error(`거래 실패: ${status}`);
     }
   }
 

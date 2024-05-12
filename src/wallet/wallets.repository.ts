@@ -5,6 +5,7 @@ import { Transaction } from './entities/transaction.entity';
 import { CoinLog } from './entities/coin-log.entity';
 import { Coin } from './entities/coin.entity';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
+import { MockCaver } from 'src/utils/mocking-caver.utils';
 
 @Injectable()
 export class WalletsRepository {
@@ -45,15 +46,24 @@ export class WalletsRepository {
     }
   }
 
-  private async createTransaction(
-    queryRunner: QueryRunner,
-    createTransactionDto: CreateTransactionDto,
-  ): Promise<Transaction> {
-    const transaction = queryRunner.manager.create(
-      Transaction,
-      createTransactionDto,
-    );
-    return await queryRunner.manager.save(transaction);
+  async createTransaction(dto: CreateTransactionDto): Promise<Transaction> {
+    const transaction = this.transactionRepository.create({
+      ...dto,
+      status: 'Submitted', // 초기 상태를 Submitted로 설정
+    });
+    await this.transactionRepository.save(transaction);
+    return transaction;
+  }
+
+  public async updateTransactionStatus(transactionHash: string): Promise<void> {
+    const transactionInfo = await MockCaver.getTransaction(transactionHash);
+    const transaction = await this.transactionRepository.findOne({
+      where: { transactionHash },
+    });
+    if (transaction) {
+      transaction.status = transactionInfo.status;
+      await this.transactionRepository.save(transaction);
+    }
   }
 
   private async updateAccountBalances(
