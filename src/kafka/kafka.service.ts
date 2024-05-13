@@ -1,5 +1,11 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { Kafka, Producer, Consumer } from 'kafkajs';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
+import { Kafka, Producer, Consumer, Partitioners } from 'kafkajs';
 import { Transport, KafkaOptions } from '@nestjs/microservices';
 import { ConfigService } from '@nestjs/config';
 import { WalletsService } from 'src/wallet/wallets.service';
@@ -13,14 +19,17 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private configService: ConfigService,
+    @Inject(forwardRef(() => WalletsService))
     private readonly walletsService: WalletsService,
   ) {
     this.kafka = new Kafka({
       clientId: this.configService.get('KAFKA_CLIENT_ID'),
-      brokers: this.configService.get('KAFKA_BROKERS'),
+      brokers: [this.configService.get('KAFKA_BROKER')],
     });
 
-    this.producer = this.kafka.producer();
+    this.producer = this.kafka.producer({
+      createPartitioner: Partitioners.LegacyPartitioner, //이전 버전과 동일한 파티셔닝 동작을 유지하기 위함
+    });
     this.consumer = this.kafka.consumer({
       groupId: this.configService.get('KAFKA_CONSUMER_GROUP_ID'),
     });
@@ -97,10 +106,10 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
       transport: Transport.KAFKA,
       options: {
         client: {
-          brokers: this.configService.get<string[]>('KAFKA_BROKERS'),
+          brokers: [this.configService.get('KAFKA_BROKER')],
         },
         consumer: {
-          groupId: this.configService.get<string>('KAFKA_CONSUMER_GROUP_ID'),
+          groupId: this.configService.get('KAFKA_CONSUMER_GROUP_ID'),
         },
       },
     };

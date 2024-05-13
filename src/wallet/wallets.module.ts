@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Coin } from './entities/coin.entity';
 import { CoinLog } from './entities/coin-log.entity';
@@ -11,7 +11,7 @@ import { KafkaModule } from 'src/kafka/kafka.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Coin, CoinLog, Transaction]),
-    KafkaModule,
+    forwardRef(() => KafkaModule),
   ],
   controllers: [WalletsController],
   providers: [WalletsService, WalletsRepository],

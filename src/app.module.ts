@@ -2,16 +2,15 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { WalletsModule } from './wallet/wallets.module';
+import { KafkaModule } from './kafka/kafka.module';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
     WalletsModule,
     TypeOrmModule.forRootAsync({
-      imports: [
-        ConfigModule.forRoot({
-          isGlobal: true,
-        }),
-      ],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
@@ -25,6 +24,7 @@ import { WalletsModule } from './wallet/wallets.module';
         // logging: true,
       }),
     }),
+    KafkaModule,
   ],
   controllers: [],
   providers: [],
