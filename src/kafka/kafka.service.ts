@@ -42,38 +42,45 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
       await this.consumer.subscribe({ topic: 'transaction-status' });
 
       this.consumer.run({
-        eachMessage: async ({ message }) => {
-          const payload = JSON.parse(message.value.toString());
-          const retryCount = payload.retryCount || 0;
-          const delay = Math.min(30000, 3000 * 2 ** retryCount); // 지수 백오프 적용, 최대 30초 간격으로 설정
+        eachMessage: async ({ topic, partition, message }) => {
+          try {
+            const payload = JSON.parse(message.value.toString());
+            const retryCount = payload.retryCount || 0;
+            const delay = Math.min(30000, 3000 * 2 ** retryCount); // 지수 백오프 적용, 최대 30초 간격으로 설정
 
-          setTimeout(async () => {
-            const transactionStatus = await MockCaver.getTransaction(
-              payload.transactionHash,
-            );
-            switch (transactionStatus.status) {
-              case 'Committed':
-                // 트랜잭션이 완료되었을 때 필요한 작업 수행
-                await this.walletsService.transactionCompletion(
-                  payload.transactionHash,
-                );
-                break;
-              case 'CommitError':
-                // 트랜잭션이 실패했을 때 오류 처리
-                await this.walletsService.transactionError(
-                  payload.status,
-                  payload.transactionHash,
-                );
-                break;
-              case 'Submitted':
-                // 재시도 횟수와 함께 메시지를 다시 큐에 추가
-                this.sendMessage('transaction-status', {
-                  ...payload,
-                  retryCount: retryCount + 1,
-                });
-                break;
-            }
-          }, delay);
+            setTimeout(async () => {
+              const transactionStatus = await MockCaver.getTransaction(
+                payload.transactionHash,
+              );
+              switch (transactionStatus.status) {
+                case 'Committed':
+                  // 트랜잭션이 완료되었을 때 필요한 작업 수행
+                  await this.walletsService.transactionCompletion(
+                    payload.transactionHash,
+                  );
+                  break;
+                case 'CommitError':
+                  // 트랜잭션이 실패했을 때 오류 처리
+                  await this.walletsService.transactionError(
+                    payload.status,
+                    payload.transactionHash,
+                  );
+                  break;
+                case 'Submitted':
+                  // 재시도 횟수와 함께 메시지를 다시 큐에 추가
+                  this.sendMessage('transaction-status', {
+                    ...payload,
+                    retryCount: retryCount + 1,
+                  });
+                  break;
+              }
+            }, delay);
+          } catch (error) {
+            console.error(`메시지 처리 실패: ${error.message}`, {
+              topic,
+              partition,
+            });
+          }
         },
       });
     } catch (error) {
