@@ -12,7 +12,7 @@ import { MockCaver } from 'src/utils/mocking-caver.utils';
 @Injectable()
 export class WalletsService {
   constructor(
-    private readonly walletsRepository: WalletsRepository,
+    private walletsRepository: WalletsRepository,
     private kafkaService: KafkaService,
   ) {}
 
@@ -59,9 +59,7 @@ export class WalletsService {
     } else if (status === 'Committed') {
       await this.transactionCompletion({ ...dto, status, transactionHash });
     } else if (status === 'CommitError') {
-      throw new BadRequestException(
-        `거래 실패했습니다. 거래 상태:${status}. 거래 Hash:${transactionHash}`,
-      );
+      await this.transactionError(status, transactionHash);
     }
 
     return { ...dto, status, transactionHash };
@@ -91,22 +89,14 @@ export class WalletsService {
     return this.walletsRepository.updateTransaction(transaction);
   }
 
-  async transactionUpdate(transactionHash: string, status: string) {
-    const transaction =
-      await this.walletsRepository.findTransactionByHash(transactionHash);
-    if (!transaction) {
-      console.error('존재하지 않는 거래입니다.');
-      return;
-    }
-
-    if (status === 'Committed') {
-      await this.walletsRepository.updateTransaction(transaction);
-    } else if (status === 'CommitError') {
-      // 사용자에게 오류인 거래 반환
-    } else {
-      // Submitted 상태는 추가적인 확인 필요 없이 대기
-      console.log('거래 submitted, 대기중....', transactionHash);
-    }
+  // 재시도 로직 추가할 예정
+  async transactionError(
+    status: 'Submitted' | 'Committed' | 'CommitError',
+    transactionHash: string,
+  ) {
+    throw new BadRequestException(
+      `거래 실패했습니다. 거래 상태:${status}. 거래 Hash:${transactionHash}`,
+    );
   }
 
   async getUserCoinLogs(userId: number): Promise<CreateCoinLogDto[]> {

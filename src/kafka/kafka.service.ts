@@ -1,5 +1,6 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { Kafka, Producer, Consumer } from 'kafkajs';
+import { Transport, KafkaOptions } from '@nestjs/microservices';
 import { ConfigService } from '@nestjs/config';
 import { WalletsService } from 'src/wallet/wallets.service';
 import { MockCaver } from 'src/utils/mocking-caver.utils';
@@ -16,7 +17,7 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
   ) {
     this.kafka = new Kafka({
       clientId: this.configService.get('KAFKA_CLIENT_ID'),
-      brokers: this.configService.get('KAFKA_BROKER'),
+      brokers: this.configService.get('KAFKA_BROKERS'),
     });
 
     this.producer = this.kafka.producer();
@@ -50,8 +51,9 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
                 break;
               case 'CommitError':
                 // 트랜잭션이 실패했을 때 오류 처리
-                console.error(
-                  `거래 실패했습니다. 거래 상태:${payload.status}. 거래 Hash:${payload.transactionHash}`,
+                await this.walletsService.transactionError(
+                  payload.status,
+                  payload.transactionHash,
                 );
                 break;
               case 'Submitted':
@@ -88,5 +90,19 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
     } catch (sendError) {
       console.error('메시지 전송 오류:', sendError);
     }
+  }
+
+  getMicroserviceOptions(): KafkaOptions {
+    return {
+      transport: Transport.KAFKA,
+      options: {
+        client: {
+          brokers: this.configService.get<string[]>('KAFKA_BROKERS'),
+        },
+        consumer: {
+          groupId: this.configService.get<string>('KAFKA_CONSUMER_GROUP_ID'),
+        },
+      },
+    };
   }
 }
