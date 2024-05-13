@@ -2,9 +2,11 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { WalletsModule } from './wallet/wallets.module';
+import { KafkaModule } from './kafka/kafka.module';
 
 @Module({
   imports: [
+    KafkaModule,
     WalletsModule,
     TypeOrmModule.forRootAsync({
       imports: [

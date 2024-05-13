@@ -5,7 +5,6 @@ import { Transaction } from './entities/transaction.entity';
 import { CoinLog } from './entities/coin-log.entity';
 import { Coin } from './entities/coin.entity';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
-import { MockCaver } from 'src/utils/mocking-caver.utils';
 
 @Injectable()
 export class WalletsRepository {
@@ -26,10 +25,7 @@ export class WalletsRepository {
     await queryRunner.connect();
     await queryRunner.startTransaction();
     try {
-      const transaction = await this.createTransaction(
-        queryRunner,
-        createTransactionDto,
-      );
+      const transaction = await this.createTransaction(createTransactionDto);
       await this.updateAccountBalances(
         queryRunner,
         createTransactionDto.userId,
@@ -49,21 +45,26 @@ export class WalletsRepository {
   async createTransaction(dto: CreateTransactionDto): Promise<Transaction> {
     const transaction = this.transactionRepository.create({
       ...dto,
-      status: 'Submitted', // 초기 상태를 Submitted로 설정
     });
     await this.transactionRepository.save(transaction);
     return transaction;
   }
 
-  public async updateTransactionStatus(transactionHash: string): Promise<void> {
-    const transactionInfo = await MockCaver.getTransaction(transactionHash);
+  async findTransactionByHash(
+    transactionHash: string,
+  ): Promise<Transaction | null> {
     const transaction = await this.transactionRepository.findOne({
       where: { transactionHash },
     });
-    if (transaction) {
-      transaction.status = transactionInfo.status;
-      await this.transactionRepository.save(transaction);
+    if (!transaction) {
+      console.error('존재하지 않는 거래입니다', transactionHash);
+      return null;
     }
+    return transaction;
+  }
+
+  async updateTransaction(transaction: Transaction): Promise<Transaction> {
+    return this.transactionRepository.save(transaction);
   }
 
   private async updateAccountBalances(
