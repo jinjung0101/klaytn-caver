@@ -10,16 +10,16 @@ export class Transaction {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ type: 'char', length: 42 })
   fromAddress: string;
 
-  @Column()
+  @Column({ type: 'char', length: 42 })
   toAddress: string;
 
   @Column('decimal', { precision: 18, scale: 8 })
   amount: number;
 
-  @Column({ unique: true })
+  @Column({ type: 'char', length: 66, unique: true })
   transactionHash: string;
 
   @Column({

@@ -3,8 +3,9 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  ManyToOne,
+  OneToOne,
   Index,
+  JoinColumn,
 } from 'typeorm';
 import { Transaction } from './transaction.entity';
 
@@ -17,7 +18,8 @@ export class CoinLog {
   @Column()
   userId: number;
 
-  @ManyToOne(() => Transaction, (transaction) => transaction.id)
+  @OneToOne(() => Transaction)
+  @JoinColumn({ name: 'transactionId' })
   transaction: Transaction;
 
   @Column('decimal', { precision: 18, scale: 8 })

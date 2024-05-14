@@ -95,13 +95,21 @@ export class WalletsRepository {
     userId: number,
     amount: number,
   ): Promise<void> {
-    let coin = await transactionalEntityManager.findOne(Coin, {
+    const coin = await transactionalEntityManager.findOne(Coin, {
       where: { userId },
     });
     if (!coin) {
-      coin = transactionalEntityManager.create(Coin, { userId, balance: 0 });
+      throw new NotFoundException(
+        `사용자의 코인 잔액 정보를 찾을 수 없습니다. userId: ${userId}`,
+      );
     }
-    coin.balance += amount;
+
+    const updatedBalance = coin.balance + amount;
+    if (updatedBalance < 0) {
+      throw new Error('잔액 부족: 잔액은 음수가 될 수 없습니다.');
+    }
+
+    coin.balance = updatedBalance;
     await transactionalEntityManager.save(coin);
   }
 

@@ -46,7 +46,7 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
           try {
             const payload = JSON.parse(message.value.toString());
             const retryCount = payload.retryCount || 0;
-            const delay = 5000 * (retryCount + 1); // 점진적 백오프 적용, 5초 단위로 증가
+            const delay = 3000 * (retryCount + 1); // 점진적 백오프 적용, 3초 단위로 증가
 
             setTimeout(async () => {
               const transactionStatus = await MockCaver.getTransaction(
@@ -55,9 +55,11 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
               switch (transactionStatus.status) {
                 case 'Committed':
                   // 트랜잭션이 완료되었을 때 필요한 작업 수행
-                  await this.walletsService.transactionCompletion(
-                    payload.transactionHash,
-                  );
+                  await this.walletsService.transactionCompletion({
+                    ...payload.dto,
+                    status: 'Committed',
+                    transactionHash: payload.transactionHash,
+                  });
                   break;
                 case 'CommitError':
                   // 트랜잭션이 실패했을 때 오류 처리

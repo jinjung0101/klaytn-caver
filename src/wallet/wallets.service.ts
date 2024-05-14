@@ -1,7 +1,6 @@
 import {
   Injectable,
   BadRequestException,
-  NotFoundException,
   InternalServerErrorException,
 } from '@nestjs/common';
 import { KafkaService } from 'src/kafka/kafka.service';
@@ -51,22 +50,19 @@ export class WalletsService {
   ): Promise<CreateTransactionDto> {
     const { status, transactionHash } = await this.mockCaverTransaction(dto);
 
-    await this.walletsRepository.createAndSaveTransaction({
-      ...dto,
-      status,
-      transactionHash,
-    });
-
-    if (status === 'Submitted') {
-      // 이벤트 발행하여 트랜잭션 모니터링 시작
+    if (status === 'Committed') {
+      await this.transactionCompletion({
+        ...dto,
+        status,
+        transactionHash,
+      });
+    } else if (status === 'Submitted') {
       await this.kafkaService.sendMessage('transaction-status', {
         transactionHash,
         status,
         dto,
-        retryCount: 0, // 초기 재시도 횟수 설정
+        retryCount: 0,
       });
-    } else if (status === 'Committed') {
-      await this.transactionCompletion({ ...dto, status, transactionHash });
     } else if (status === 'CommitError') {
       await this.transactionError(status, transactionHash);
     }
@@ -86,16 +82,15 @@ export class WalletsService {
   }
 
   async transactionCompletion(dto: CreateTransactionDto) {
-    const transaction = await this.walletsRepository.findTransactionByHash(
-      dto.transactionHash,
-    );
-    if (!transaction) {
-      throw new NotFoundException(
-        `존재하지 않는 거래입니다. ${dto.transactionHash}`,
+    const existingTransaction =
+      await this.walletsRepository.findTransactionByHash(dto.transactionHash);
+    if (existingTransaction) {
+      throw new BadRequestException(
+        `이미 처리된 거래입니다. ${dto.transactionHash}`,
       );
     }
-    transaction.status = 'Committed';
-    return this.walletsRepository.updateTransaction(transaction);
+
+    await this.walletsRepository.createAndSaveTransaction(dto);
   }
 
   // 재시도 로직 추가할 예정
