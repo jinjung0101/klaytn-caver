@@ -46,7 +46,7 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
           try {
             const payload = JSON.parse(message.value.toString());
             const retryCount = payload.retryCount || 0;
-            const delay = Math.min(30000, 3000 * 2 ** retryCount); // 지수 백오프 적용, 최대 30초 간격으로 설정
+            const delay = 5000 * (retryCount + 1); // 점진적 백오프 적용, 5초 단위로 증가
 
             setTimeout(async () => {
               const transactionStatus = await MockCaver.getTransaction(
