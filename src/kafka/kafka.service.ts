@@ -28,7 +28,7 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
     });
 
     this.producer = this.kafka.producer({
-      createPartitioner: Partitioners.LegacyPartitioner, //이전 버전과 동일한 파티셔닝 동작을 유지하기 위함
+      createPartitioner: Partitioners.DefaultPartitioner,
     });
     this.consumer = this.kafka.consumer({
       groupId: this.configService.get('KAFKA_CONSUMER_GROUP_ID'),
