@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { QueryRunner, Repository, DataSource } from 'typeorm';
+import { QueryRunner, Repository, DataSource, EntityManager } from 'typeorm';
 import { Transaction } from './entities/transaction.entity';
 import { CoinLog } from './entities/coin-log.entity';
 import { Coin } from './entities/coin.entity';
@@ -73,35 +73,50 @@ export class WalletsRepository {
     amount: number,
     transaction: Transaction,
   ): Promise<void> {
-    await this.updateCoinBalance(queryRunner, userId, amount);
-    await this.createCoinLog(queryRunner, userId, transaction, amount);
+    await queryRunner.manager.transaction(
+      async (transactionalEntityManager: EntityManager) => {
+        await this.updateCoinBalance(
+          transactionalEntityManager,
+          userId,
+          amount,
+        );
+        await this.createCoinLog(
+          transactionalEntityManager,
+          userId,
+          transaction,
+          amount,
+        );
+      },
+    );
   }
 
   private async updateCoinBalance(
-    queryRunner: QueryRunner,
+    transactionalEntityManager: EntityManager,
     userId: number,
     amount: number,
   ): Promise<void> {
-    let coin = await this.coinRepository.findOne({ where: { userId } });
+    let coin = await transactionalEntityManager.findOne(Coin, {
+      where: { userId },
+    });
     if (!coin) {
-      coin = this.coinRepository.create({ userId, balance: 0 });
+      coin = transactionalEntityManager.create(Coin, { userId, balance: 0 });
     }
     coin.balance += amount;
-    await queryRunner.manager.save(coin);
+    await transactionalEntityManager.save(coin);
   }
 
   private async createCoinLog(
-    queryRunner: QueryRunner,
+    transactionalEntityManager: EntityManager,
     userId: number,
     transaction: Transaction,
     amountChanged: number,
   ): Promise<void> {
-    const coinLog = this.coinLogRepository.create({
+    const coinLog = transactionalEntityManager.create(CoinLog, {
       userId,
       transaction,
       amountChanged,
     });
-    await queryRunner.manager.save(coinLog);
+    await transactionalEntityManager.save(coinLog);
   }
 
   async getBalance(userId: number): Promise<number> {

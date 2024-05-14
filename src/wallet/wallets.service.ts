@@ -63,6 +63,7 @@ export class WalletsService {
         transactionHash,
         status,
         dto,
+        retryCount: 0, // 초기 재시도 횟수 설정
       });
     } else if (status === 'Committed') {
       await this.transactionCompletion({ ...dto, status, transactionHash });
