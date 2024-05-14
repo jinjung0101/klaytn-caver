@@ -3,7 +3,10 @@ import { WalletsService } from './wallets.service';
 import { WalletsRepository } from './wallets.repository';
 import { KafkaService } from 'src/kafka/kafka.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
-import { BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 
 jest.mock('src/kafka/kafka.service');
 
@@ -80,6 +83,16 @@ describe('WalletsService', () => {
       expect(await service.checkAndHandleTransaction(dto)).toBe(result);
       expect(service.handleBlockchainTransaction).toHaveBeenCalledWith(dto);
     });
+
+    it('블록체인 거래 확인 작업 중 오류가 발생하면 InternalServerErrorException을 던져야 합니다', async () => {
+      jest
+        .spyOn(repository, 'getBalance')
+        .mockRejectedValue(new Error('Test Error'));
+
+      await expect(service.checkAndHandleTransaction(dto)).rejects.toThrow(
+        InternalServerErrorException,
+      );
+    });
   });
 
   describe('handleBlockchainTransaction', () => {
@@ -132,6 +145,16 @@ describe('WalletsService', () => {
         'hash',
       );
     });
+
+    it('블록체인 거래 처리 중 오류가 발생하면 InternalServerErrorException을 던져야 합니다', async () => {
+      jest
+        .spyOn(service, 'mockCaverTransaction')
+        .mockRejectedValue(new Error('Test Error'));
+
+      await expect(service.handleBlockchainTransaction(dto)).rejects.toThrow(
+        InternalServerErrorException,
+      );
+    });
   });
 
   describe('transactionCompletion', () => {
@@ -155,6 +178,38 @@ describe('WalletsService', () => {
 
       await service.transactionCompletion(dto);
       expect(repository.createAndSaveTransaction).toHaveBeenCalledWith(dto);
+    });
+
+    it('블록체인 거래 처리 중 오류가 발생하면 InternalServerErrorException을 던져야 합니다', async () => {
+      jest
+        .spyOn(repository, 'findTransactionByHash')
+        .mockRejectedValue(new Error('Test Error'));
+
+      await expect(service.transactionCompletion(dto)).rejects.toThrow(
+        InternalServerErrorException,
+      );
+    });
+  });
+
+  describe('getUserCoinLogs', () => {
+    it('정상적인 경우 findCoinLogsByUserId를 호출하고 결과를 반환해야 합니다', async () => {
+      const coinLogs = [{ userId: 1, amountChanged: 100 }];
+      jest
+        .spyOn(repository, 'findCoinLogsByUserId')
+        .mockResolvedValue(coinLogs as any);
+
+      expect(await service.getUserCoinLogs(1)).toBe(coinLogs);
+      expect(repository.findCoinLogsByUserId).toHaveBeenCalledWith(1);
+    });
+
+    it('코인 로그 조회 중 오류가 발생하면 InternalServerErrorException을 던져야 합니다', async () => {
+      jest
+        .spyOn(repository, 'findCoinLogsByUserId')
+        .mockRejectedValue(new Error('Test Error'));
+
+      await expect(service.getUserCoinLogs(1)).rejects.toThrow(
+        InternalServerErrorException,
+      );
     });
   });
 });
