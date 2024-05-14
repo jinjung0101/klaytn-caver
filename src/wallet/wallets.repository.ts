@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { QueryRunner, Repository, DataSource, EntityManager } from 'typeorm';
 import { Transaction } from './entities/transaction.entity';
@@ -36,7 +40,8 @@ export class WalletsRepository {
       return transaction;
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      throw error;
+      console.error('createAndSaveTransaction 오류 발생:', error);
+      throw new InternalServerErrorException('트랜잭션 저장 중 오류 발생');
     } finally {
       await queryRunner.release();
     }
@@ -53,18 +58,28 @@ export class WalletsRepository {
   async findTransactionByHash(
     transactionHash: string,
   ): Promise<Transaction | null> {
-    const transaction = await this.transactionRepository.findOne({
-      where: { transactionHash },
-    });
-    if (!transaction) {
-      console.error('존재하지 않는 거래입니다', transactionHash);
-      return null;
+    try {
+      const transaction = await this.transactionRepository.findOne({
+        where: { transactionHash },
+      });
+      if (!transaction) {
+        console.error('존재하지 않는 거래입니다', transactionHash);
+        return null;
+      }
+      return transaction;
+    } catch (error) {
+      console.error('findTransactionByHash 오류 발생:', error);
+      throw new InternalServerErrorException('트랜잭션 조회 중 오류 발생');
     }
-    return transaction;
   }
 
   async updateTransaction(transaction: Transaction): Promise<Transaction> {
-    return this.transactionRepository.save(transaction);
+    try {
+      return this.transactionRepository.save(transaction);
+    } catch (error) {
+      console.error('updateTransaction 오류 발생:', error);
+      throw new InternalServerErrorException('트랜잭션 업데이트 중 오류 발생');
+    }
   }
 
   private async updateAccountBalances(
@@ -73,21 +88,26 @@ export class WalletsRepository {
     amount: number,
     transaction: Transaction,
   ): Promise<void> {
-    await queryRunner.manager.transaction(
-      async (transactionalEntityManager: EntityManager) => {
-        await this.updateCoinBalance(
-          transactionalEntityManager,
-          userId,
-          amount,
-        );
-        await this.createCoinLog(
-          transactionalEntityManager,
-          userId,
-          transaction,
-          amount,
-        );
-      },
-    );
+    try {
+      await queryRunner.manager.transaction(
+        async (transactionalEntityManager: EntityManager) => {
+          await this.updateCoinBalance(
+            transactionalEntityManager,
+            userId,
+            amount,
+          );
+          await this.createCoinLog(
+            transactionalEntityManager,
+            userId,
+            transaction,
+            amount,
+          );
+        },
+      );
+    } catch (error) {
+      console.error('updateAccountBalances 오류 발생:', error);
+      throw new InternalServerErrorException('계정 잔액 업데이트 중 오류 발생');
+    }
   }
 
   private async updateCoinBalance(
@@ -95,22 +115,27 @@ export class WalletsRepository {
     userId: number,
     amount: number,
   ): Promise<void> {
-    const coin = await transactionalEntityManager.findOne(Coin, {
-      where: { userId },
-    });
-    if (!coin) {
-      throw new NotFoundException(
-        `사용자의 코인 잔액 정보를 찾을 수 없습니다. userId: ${userId}`,
-      );
-    }
+    try {
+      const coin = await transactionalEntityManager.findOne(Coin, {
+        where: { userId },
+      });
+      if (!coin) {
+        throw new NotFoundException(
+          `사용자의 코인 잔액 정보를 찾을 수 없습니다. userId: ${userId}`,
+        );
+      }
 
-    const updatedBalance = coin.balance + amount;
-    if (updatedBalance < 0) {
-      throw new Error('잔액 부족: 잔액은 음수가 될 수 없습니다.');
-    }
+      const updatedBalance = coin.balance + amount;
+      if (updatedBalance < 0) {
+        throw new Error('잔액 부족: 잔액은 음수가 될 수 없습니다.');
+      }
 
-    coin.balance = updatedBalance;
-    await transactionalEntityManager.save(coin);
+      coin.balance = updatedBalance;
+      await transactionalEntityManager.save(coin);
+    } catch (error) {
+      console.error('updateCoinBalance 오류 발생:', error);
+      throw new InternalServerErrorException('코인 잔액 업데이트 중 오류 발생');
+    }
   }
 
   private async createCoinLog(
@@ -119,23 +144,41 @@ export class WalletsRepository {
     transaction: Transaction,
     amountChanged: number,
   ): Promise<void> {
-    const coinLog = transactionalEntityManager.create(CoinLog, {
-      userId,
-      transaction,
-      amountChanged,
-    });
-    await transactionalEntityManager.save(coinLog);
+    try {
+      const coinLog = transactionalEntityManager.create(CoinLog, {
+        userId,
+        transaction,
+        amountChanged,
+      });
+      await transactionalEntityManager.save(coinLog);
+    } catch (error) {
+      console.error('createCoinLog 오류 발생:', error);
+      throw new InternalServerErrorException('코인 로그 생성 중 오류 발생');
+    }
   }
 
   async getBalance(userId: number): Promise<number> {
-    const coinRecord = await this.coinRepository.findOne({ where: { userId } });
-    if (!coinRecord) throw new NotFoundException('사용자가 존재하지 않습니다.');
-    return coinRecord.balance;
+    try {
+      const coinRecord = await this.coinRepository.findOne({
+        where: { userId },
+      });
+      if (!coinRecord)
+        throw new NotFoundException('사용자가 존재하지 않습니다.');
+      return coinRecord.balance;
+    } catch (error) {
+      console.error('getBalance 오류 발생:', error);
+      throw new InternalServerErrorException('잔액 조회 중 오류 발생');
+    }
   }
 
   async findCoinLogsByUserId(userId: number): Promise<CoinLog[]> {
-    return this.coinLogRepository.find({
-      where: { userId: userId },
-    });
+    try {
+      return await this.coinLogRepository.find({
+        where: { userId: userId },
+      });
+    } catch (error) {
+      console.error('findCoinLogsByUserId 오류 발생:', error);
+      throw new InternalServerErrorException('코인 로그 조회 중 오류 발생');
+    }
   }
 }

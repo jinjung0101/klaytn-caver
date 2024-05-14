@@ -1,115 +1,160 @@
-// import { Test, TestingModule } from '@nestjs/testing';
-// import { WalletsService } from './wallets.service';
-// import { WalletsRepository } from './wallets.repository';
-// import { BadRequestException, NotFoundException } from '@nestjs/common';
-// import { CreateTransactionDto } from './dto/create-transaction.dto';
-// import { Transaction } from './entities/transaction.entity';
+import { Test, TestingModule } from '@nestjs/testing';
+import { WalletsService } from './wallets.service';
+import { WalletsRepository } from './wallets.repository';
+import { KafkaService } from 'src/kafka/kafka.service';
+import { CreateTransactionDto } from './dto/create-transaction.dto';
+import { BadRequestException } from '@nestjs/common';
 
-// describe('WalletsService', () => {
-//   let service: WalletsService;
-//   let repository;
+jest.mock('src/kafka/kafka.service');
 
-//   const mockTransactionsRepository = () => ({
-//     getBalance: jest.fn(),
-//     createAndSaveTransaction: jest.fn().mockResolvedValue(new Transaction()),
-//   });
+describe('WalletsService', () => {
+  let service: WalletsService;
+  let repository: WalletsRepository;
+  let kafkaService: KafkaService;
+  let dto: CreateTransactionDto;
 
-//   beforeEach(async () => {
-//     const module: TestingModule = await Test.createTestingModule({
-//       providers: [
-//         WalletsService,
-//         {
-//           provide: WalletsRepository,
-//           useFactory: mockTransactionsRepository,
-//         },
-//       ],
-//     }).compile();
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        WalletsService,
+        {
+          provide: WalletsRepository,
+          useValue: {
+            getBalance: jest.fn(),
+            findTransactionByHash: jest.fn(),
+            createAndSaveTransaction: jest.fn(),
+            findCoinLogsByUserId: jest.fn(),
+          },
+        },
+        {
+          provide: KafkaService,
+          useValue: {
+            sendMessage: jest.fn(),
+          },
+        },
+      ],
+    }).compile();
 
-//     service = module.get<WalletsService>(WalletsService);
-//     repository = module.get<WalletsRepository>(WalletsRepository);
-//   });
+    service = module.get<WalletsService>(WalletsService);
+    repository = module.get<WalletsRepository>(WalletsRepository);
+    kafkaService = module.get<KafkaService>(KafkaService);
 
-//   describe('transferToSpending', () => {
-//     it('잔액이 부족할 경우 BadRequestException 예외를 발생시킨다', async () => {
-//       const dto = new CreateTransactionDto();
-//       dto.userId = 1;
-//       dto.amount = 100;
-//       repository.getBalance.mockResolvedValue(50); // 부족한 잔액
+    dto = {
+      fromAddress: 'from',
+      toAddress: 'to',
+      amount: 100,
+      userId: 1,
+      status: 'Submitted',
+      transactionHash: 'hash',
+    };
+  });
 
-//       await expect(service.transferToSpending(dto)).rejects.toThrow(
-//         BadRequestException,
-//       );
-//     });
+  describe('transferToSpending', () => {
+    it('올바른 DTO와 함께 checkAndHandleTransaction을 호출해야 합니다', async () => {
+      const result = { ...dto, status: 'Committed' } as const;
+      jest
+        .spyOn(service, 'checkAndHandleTransaction')
+        .mockResolvedValue(result);
 
-//     it('잔액이 충분하고 블록체인 트랜잭션이 성공하면 트랜잭션을 저장한다', async () => {
-//       const dto = new CreateTransactionDto();
-//       dto.userId = 1;
-//       dto.amount = 50;
-//       repository.getBalance.mockResolvedValue(100); // 충분한 잔액
-//       jest
-//         .spyOn(service, 'mockBlockchainTransaction')
-//         .mockResolvedValue({ status: 'Committed', transactionHash: '0x...' });
+      expect(await service.transferToSpending(dto)).toBe(result);
+      expect(service.checkAndHandleTransaction).toHaveBeenCalledWith(dto);
+    });
+  });
 
-//       await expect(service.transferToSpending(dto)).resolves.toBeInstanceOf(
-//         Transaction,
-//       );
-//       expect(repository.createAndSaveTransaction).toHaveBeenCalled();
-//     });
+  describe('checkAndHandleTransaction', () => {
+    it('잔액이 부족하면 BadRequestException을 던져야 합니다', async () => {
+      jest.spyOn(repository, 'getBalance').mockResolvedValue(50);
 
-//     it('블록체인 트랜잭션이 실패하면 NotFoundException을 발생시킨다', async () => {
-//       const dto = new CreateTransactionDto();
-//       dto.userId = 1;
-//       dto.amount = 50;
-//       repository.getBalance.mockResolvedValue(100);
-//       jest
-//         .spyOn(service, 'mockBlockchainTransaction')
-//         .mockResolvedValue({ status: 'CommitError', transactionHash: '0x...' });
+      await expect(service.checkAndHandleTransaction(dto)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
 
-//       await expect(service.transferToSpending(dto)).rejects.toThrow(
-//         NotFoundException,
-//       );
-//     });
-//   });
+    it('잔액이 충분하면 handleBlockchainTransaction을 호출해야 합니다', async () => {
+      const result = { ...dto, status: 'Committed' } as const;
+      jest.spyOn(repository, 'getBalance').mockResolvedValue(150);
+      jest
+        .spyOn(service, 'handleBlockchainTransaction')
+        .mockResolvedValue(result);
 
-//   describe('transferToWallet', () => {
-//     it('잔액이 부족할 경우 BadRequestException 예외를 발생시킨다', async () => {
-//       const dto = new CreateTransactionDto();
-//       dto.userId = 1;
-//       dto.amount = 100;
-//       repository.getBalance.mockResolvedValue(50); // 부족한 잔액
+      expect(await service.checkAndHandleTransaction(dto)).toBe(result);
+      expect(service.handleBlockchainTransaction).toHaveBeenCalledWith(dto);
+    });
+  });
 
-//       await expect(service.transferToWallet(dto)).rejects.toThrow(
-//         BadRequestException,
-//       );
-//     });
+  describe('handleBlockchainTransaction', () => {
+    const mockResponses = {
+      Committed: { status: 'Committed', transactionHash: 'hash' } as const,
+      Submitted: { status: 'Submitted', transactionHash: 'hash' } as const,
+      CommitError: { status: 'CommitError', transactionHash: 'hash' } as const,
+    };
 
-//     it('잔액이 충분하고 블록체인 트랜잭션이 성공하면 트랜잭션을 저장한다', async () => {
-//       const dto = new CreateTransactionDto();
-//       dto.userId = 1;
-//       dto.amount = 50;
-//       repository.getBalance.mockResolvedValue(100); // 충분한 잔액
-//       jest
-//         .spyOn(service, 'mockBlockchainTransaction')
-//         .mockResolvedValue({ status: 'Committed', transactionHash: '0x...' });
+    it('Committed 상태의 트랜잭션을 올바르게 처리해야 합니다', async () => {
+      jest
+        .spyOn(service, 'mockCaverTransaction')
+        .mockResolvedValue(mockResponses.Committed);
+      jest.spyOn(service, 'transactionCompletion').mockResolvedValue(undefined);
 
-//       await expect(service.transferToWallet(dto)).resolves.toBeInstanceOf(
-//         Transaction,
-//       );
-//       expect(repository.createAndSaveTransaction).toHaveBeenCalled();
-//     });
+      await service.handleBlockchainTransaction(dto);
+      expect(service.transactionCompletion).toHaveBeenCalledWith({
+        ...dto,
+        status: 'Committed',
+        transactionHash: 'hash',
+      });
+    });
 
-//     it('블록체인 트랜잭션이 실패하면 NotFoundException을 발생시킨다', async () => {
-//       const dto = new CreateTransactionDto();
-//       dto.userId = 1;
-//       dto.amount = 50;
-//       repository.getBalance.mockResolvedValue(100);
-//       jest
-//         .spyOn(service, 'mockBlockchainTransaction')
-//         .mockResolvedValue({ status: 'CommitError', transactionHash: '0x...' });
+    it('Submitted 상태의 트랜잭션을 올바르게 처리해야 합니다', async () => {
+      jest
+        .spyOn(service, 'mockCaverTransaction')
+        .mockResolvedValue(mockResponses.Submitted);
 
-//       await expect(service.transferToWallet(dto)).rejects.toThrow(
-//         NotFoundException,
-//       );
-//     });
-//   });
-// });
+      await service.handleBlockchainTransaction(dto);
+      expect(kafkaService.sendMessage).toHaveBeenCalledWith(
+        'transaction-status',
+        {
+          transactionHash: 'hash',
+          status: 'Submitted',
+          dto,
+          retryCount: 0,
+        },
+      );
+    });
+
+    it('CommitError 상태의 트랜잭션을 올바르게 처리해야 합니다', async () => {
+      jest
+        .spyOn(service, 'mockCaverTransaction')
+        .mockResolvedValue(mockResponses.CommitError);
+      jest.spyOn(service, 'transactionError').mockResolvedValue(undefined);
+
+      await service.handleBlockchainTransaction(dto);
+      expect(service.transactionError).toHaveBeenCalledWith(
+        'CommitError',
+        'hash',
+      );
+    });
+  });
+
+  describe('transactionCompletion', () => {
+    it('이미 존재하는 트랜잭션이면 BadRequestException을 던져야 합니다', async () => {
+      jest
+        .spyOn(repository, 'findTransactionByHash')
+        .mockResolvedValue(dto as any);
+
+      await expect(service.transactionCompletion(dto)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('트랜잭션이 존재하지 않으면 createAndSaveTransaction을 호출해야 합니다', async () => {
+      jest.spyOn(repository, 'findTransactionByHash').mockResolvedValue(null);
+      jest.spyOn(repository, 'createAndSaveTransaction').mockResolvedValue({
+        ...dto,
+        id: 1,
+        createdAt: new Date(),
+      } as any);
+
+      await service.transactionCompletion(dto);
+      expect(repository.createAndSaveTransaction).toHaveBeenCalledWith(dto);
+    });
+  });
+});

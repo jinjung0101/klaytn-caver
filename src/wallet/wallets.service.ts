@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  BadRequestException,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { KafkaService } from 'src/kafka/kafka.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { CreateCoinLogDto } from './dto/create-coin-log.dto';
@@ -28,21 +24,14 @@ export class WalletsService {
     return this.checkAndHandleTransaction(dto);
   }
 
-  private async checkAndHandleTransaction(
+  async checkAndHandleTransaction(
     dto: CreateTransactionDto,
   ): Promise<CreateTransactionDto> {
     const userBalance = await this.walletsRepository.getBalance(dto.userId);
     if (userBalance < dto.amount) {
       throw new BadRequestException('잔액 부족: 충분한 Klay가 없습니다.');
     }
-
-    try {
-      return await this.handleBlockchainTransaction(dto);
-    } catch (error) {
-      throw new InternalServerErrorException(
-        '거래 처리 중 오류가 발생하였습니다.',
-      );
-    }
+    return this.handleBlockchainTransaction(dto);
   }
 
   async handleBlockchainTransaction(
