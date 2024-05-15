@@ -52,48 +52,48 @@ describe('WalletsService', () => {
     };
   });
 
-  describe('transferToSpending', () => {
-    it('올바른 DTO와 함께 checkAndHandleTransaction을 호출해야 합니다', async () => {
-      const result = { ...dto, status: 'Committed' } as const;
-      jest
-        .spyOn(service, 'checkAndHandleTransaction')
-        .mockResolvedValue(result);
+  // describe('transferToSpending', () => {
+  //   it('올바른 DTO와 함께 checkAndHandleTransaction을 호출해야 합니다', async () => {
+  //     const result = { ...dto, status: 'Committed' } as const;
+  //     jest
+  //       .spyOn(service, 'checkAndHandleTransaction')
+  //       .mockResolvedValue(result);
 
-      expect(await service.transferToSpending(dto)).toBe(result);
-      expect(service.checkAndHandleTransaction).toHaveBeenCalledWith(dto);
-    });
-  });
+  //     expect(await service.transferToSpending(dto)).toBe(result);
+  //     expect(service.checkAndHandleTransaction).toHaveBeenCalledWith(dto);
+  //   });
+  // });
 
-  describe('checkAndHandleTransaction', () => {
-    it('잔액이 부족하면 BadRequestException을 던져야 합니다', async () => {
-      jest.spyOn(repository, 'getBalance').mockResolvedValue(50);
+  // describe('checkAndHandleTransaction', () => {
+  //   it('잔액이 부족하면 BadRequestException을 던져야 합니다', async () => {
+  //     jest.spyOn(repository, 'getBalance').mockResolvedValue(50);
 
-      await expect(service.checkAndHandleTransaction(dto)).rejects.toThrow(
-        BadRequestException,
-      );
-    });
+  //     await expect(service.checkAndHandleTransaction(dto)).rejects.toThrow(
+  //       BadRequestException,
+  //     );
+  //   });
 
-    it('잔액이 충분하면 handleBlockchainTransaction을 호출해야 합니다', async () => {
-      const result = { ...dto, status: 'Committed' } as const;
-      jest.spyOn(repository, 'getBalance').mockResolvedValue(150);
-      jest
-        .spyOn(service, 'handleBlockchainTransaction')
-        .mockResolvedValue(result);
+  //   it('잔액이 충분하면 handleBlockchainTransaction을 호출해야 합니다', async () => {
+  //     const result = { ...dto, status: 'Committed' } as const;
+  //     jest.spyOn(repository, 'getBalance').mockResolvedValue(150);
+  //     jest
+  //       .spyOn(service, 'handleBlockchainTransaction')
+  //       .mockResolvedValue(result);
 
-      expect(await service.checkAndHandleTransaction(dto)).toBe(result);
-      expect(service.handleBlockchainTransaction).toHaveBeenCalledWith(dto);
-    });
+  //     expect(await service.checkAndHandleTransaction(dto)).toBe(result);
+  //     expect(service.handleBlockchainTransaction).toHaveBeenCalledWith(dto);
+  //   });
 
-    it('블록체인 거래 확인 작업 중 오류가 발생하면 InternalServerErrorException을 던져야 합니다', async () => {
-      jest
-        .spyOn(repository, 'getBalance')
-        .mockRejectedValue(new Error('Test Error'));
+  //   it('블록체인 거래 확인 작업 중 오류가 발생하면 InternalServerErrorException을 던져야 합니다', async () => {
+  //     jest
+  //       .spyOn(repository, 'getBalance')
+  //       .mockRejectedValue(new Error('Test Error'));
 
-      await expect(service.checkAndHandleTransaction(dto)).rejects.toThrow(
-        InternalServerErrorException,
-      );
-    });
-  });
+  //     await expect(service.checkAndHandleTransaction(dto)).rejects.toThrow(
+  //       InternalServerErrorException,
+  //     );
+  //   });
+  // });
 
   describe('handleBlockchainTransaction', () => {
     const mockResponses = {

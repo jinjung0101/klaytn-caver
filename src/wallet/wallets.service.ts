@@ -23,29 +23,31 @@ export class WalletsService {
     private kafkaService: KafkaService,
   ) {}
 
-  async transferToSpending(
-    dto: CreateTransactionDto,
-  ): Promise<CreateTransactionDto> {
-    return this.checkAndHandleTransaction(dto);
+  async transferToSpending(dto: CreateTransactionDto): Promise<void> {
+    await this.kafkaService.sendMessage(
+      'transaction-queue',
+      dto,
+      dto.userId.toString(),
+    );
   }
 
-  async transferToWallet(
-    dto: CreateTransactionDto,
-  ): Promise<CreateTransactionDto> {
-    return this.checkAndHandleTransaction(dto);
+  async transferToWallet(dto: CreateTransactionDto): Promise<void> {
+    await this.kafkaService.sendMessage(
+      'transaction-queue',
+      dto,
+      dto.userId.toString(),
+    );
   }
 
-  async checkAndHandleTransaction(
-    dto: CreateTransactionDto,
-  ): Promise<CreateTransactionDto> {
+  async processTransaction(dto: CreateTransactionDto): Promise<void> {
     try {
       const userBalance = await this.walletsRepository.getBalance(dto.userId);
       if (userBalance < dto.amount) {
         throw new BadRequestException('잔액 부족: 충분한 Klay가 없습니다.');
       }
-      return await this.handleBlockchainTransaction(dto);
+      await this.handleBlockchainTransaction(dto);
     } catch (error) {
-      console.error('checkAndHandleTransaction 오류 발생:', error);
+      console.error('processTransaction 오류 발생:', error);
       throw new InternalServerErrorException(
         '블록체인 거래 확인 작업 중 오류가 발생하였습니다.',
       );

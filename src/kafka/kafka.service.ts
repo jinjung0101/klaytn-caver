@@ -40,12 +40,17 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
       await this.producer.connect();
       await this.consumer.connect();
       await this.consumer.subscribe({ topic: 'transaction-status' });
+      await this.consumer.subscribe({ topic: 'transaction-queue' });
 
       this.consumer.run({
         eachMessage: async ({ topic, partition, message }) => {
           try {
             const payload = JSON.parse(message.value.toString());
-            await this.walletsService.handleTransactionMessage(payload);
+            if (topic === 'transaction-status') {
+              await this.walletsService.handleTransactionMessage(payload);
+            } else if (topic === 'transaction-queue') {
+              await this.walletsService.processTransaction(payload);
+            }
           } catch (error) {
             console.error(`메시지 처리 실패: ${error.message}`, {
               topic,
@@ -68,11 +73,11 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async sendMessage(topic: string, message: any) {
+  async sendMessage(topic: string, message: any, key?: string) {
     try {
       await this.producer.send({
         topic,
-        messages: [{ value: JSON.stringify(message) }],
+        messages: [{ key, value: JSON.stringify(message) }],
       });
     } catch (sendError) {
       console.error('메시지 전송 오류:', sendError);

@@ -28,10 +28,6 @@
   - 성공 시: 사용자의 거래내역
   - 실패 시: 오류 메시지
 
-### 트랜잭션 로깅
-
-- 로그 데이터는 자동으로 데이터베이스에 기록되며, 각 트랜잭션은 사용자 ID, 트랜잭션 세부 정보 및 금액 변경을 포함합니다.
-
 ## 데이터베이스 설계
 
 ### 테이블 설계
@@ -81,7 +77,7 @@
 ## 트랜잭션 처리 흐름
 
 - '스펜딩으로 보내기' 및 '지갑으로 보내기' 기능은 `WalletsService`의 `transferToSpending` 및 `transferToWallet` 메소드를 통해 처리됩니다.
-- 각 API는 Kafka 메시지 큐를 사용하여 트랜잭션 상태 변경을 비동기적으로 처리합니다. 이는 시스템의 반응성과 확장성을 향상시킵니다.
+- 각 API는 Kafka 메시지 큐를 사용하여 트랜잭션 상태 변경을 비동기적으로 처리합니다.
 - 트랜잭션 상태(`Submitted`, `Committed`, `CommitError`)는 블록체인의 트랜잭션 처리 결과에 따라 결정됩니다. MockCaver 유틸리티를 통해 시뮬레이션됩니다.
 - 아래 자세한 상세 과정을 추가했습니다.
 
@@ -107,37 +103,42 @@
 
    - **API 호출**: 사용자는 `POST /wallets/sendToSpending` 또는 `POST /wallets/sendToWallet` 엔드포인트를 호출합니다.
    - **데이터 수신**: 요청 바디에는 `fromAddress` (보내는 주소), `toAddress` (받는 주소), `amount` (전송 금액)가 포함된 `CreateTransactionDto` 객체가 포함됩니다.
+   - **Kafka 메시지 전송**: 사용자의 요청은 `KafkaService`의 `sendMessage` 메소드를 통해 `transaction-queue` 토픽으로 전송되며, 이때 `userId`가 메시지의 키로 설정됩니다. 이는 특정 사용자의 여러 요청이 순차적으로 처리되도록 보장합니다.
 
-2. **잔액 검증**:
+2. **트랜잭션 큐 처리**:
 
-   - **잔액 확인**: `WalletsService`는 `WalletsRepository`의 `getBalance` 메소드를 호출하여 사용자의 현재 Klay 잔액을 조회합니다.
+   - **Kafka 컨슈머**: Kafka 컨슈머는 `transaction-queue` 토픽을 구독하고, 메시지를 수신할 때마다 `processTransaction` 메소드를 호출하여 트랜잭션을 처리합니다.
+
+3. **잔액 검증**:
+
+   - **잔액 확인**: `processTransaction` 메소드는 `WalletsRepository`의 `getBalance` 메소드를 호출하여 사용자의 현재 Klay 잔액을 조회합니다.
    - **잔액 비교**: 요청한 금액(`amount`)이 사용자의 잔액보다 큰지 확인합니다.
    - **부족 시 예외 처리**: 잔액이 부족한 경우, `BadRequestException`이 발생하여 트랜잭션을 중단하고 사용자에게 오류 메시지를 반환합니다.
 
-3. **블록체인 트랜잭션 요청**:
+4. **블록체인 트랜잭션 요청**:
 
    - **MockCaver 호출**: `WalletsService`는 `MockCaver` 클래스의 `transferKlay` 메소드를 호출하여 블록체인 네트워크에 트랜잭션을 요청합니다.
    - **트랜잭션 상태 반환**: `transferKlay` 메소드는 트랜잭션의 상태(`Submitted`, `Committed`, `CommitError`)와 트랜잭션 해시를 반환합니다.
 
-4. **트랜잭션 상태 비동기 모니터링**:
+5. **트랜잭션 상태 비동기 모니터링**:
 
    - **Kafka 메시지 전송**: 트랜잭션이 `Submitted` 상태인 경우, `KafkaService`를 사용하여 `transaction-status` 토픽에 트랜잭션 상태 메시지를 전송합니다.
    - **트랜잭션 상태 추적**: Kafka 컨슈머가 해당 메시지를 수신하고, `handleTransactionMessage` 메소드를 통해 트랜잭션 상태를 비동기적으로 모니터링합니다.
    - **상태 변경 처리**: 트랜잭션 상태가 `Committed` 또는 `CommitError`로 변경되면, `handleTransactionStatus` 메소드가 호출되어 적절한 후속 처리가 이루어집니다.
 
-5. **트랜잭션 상태 변경에 따른 처리**:
+6. **트랜잭션 상태 변경에 따른 처리**:
 
    - **Committed 상태**: 트랜잭션이 `Committed` 상태로 변경되면, `transactionCompletion` 메소드가 호출되어 트랜잭션을 완료하고 데이터베이스에 최종 상태를 반영합니다.
    - **CommitError 상태**: 트랜잭션이 `CommitError` 상태로 변경되면, `transactionError` 메소드가 호출되어 오류 처리 로직을 실행하고 사용자에게 오류를 알립니다.
    - **Submitted 상태 재시도**: 트랜잭션이 여전히 `Submitted` 상태로 남아 있는 경우, `handleSubmittedStatus` 메소드가 호출되어 재시도 로직을 통해 Kafka 메시지를 다시 전송합니다.
 
-6. **트랜잭션 데이터베이스에 저장**:
+7. **트랜잭션 데이터베이스에 저장**:
 
    - **트랜잭션 저장**: 트랜잭션이 유효한 경우, `WalletsRepository`의 `createAndSaveTransaction` 메소드를 호출하여 트랜잭션을 데이터베이스에 저장합니다.
-   - **잔액 업데이트**: `updateAccountBalances` 메소드를 통해 사용자의 Klay 잔액이 업데이트되고, 이와 관련된 트랜잭션 로그가 `CoinLog` 테이블에 기록됩니다.
+   - **잔액 업데이트**: `updateAccountBalances` 메소드를 통해 사용자의 Klay 잔액이 업데이트되고, 이와 관련된 트랜잭션 로그가 `CoinLog` 테이블에 기록됩니다. 이때 `pessimistic_write` 락을 사용하여 동시성 문제를 방지합니다.
    - **트랜잭션 커밋**: 데이터베이스 트랜잭션이 성공적으로 완료되면 커밋되고, 실패할 경우 롤백됩니다.
 
-7. **오류 처리 및 로깅**:
+8. **오류 처리 및 로깅**:
 
    - **예외 처리**: 트랜잭션 처리 과정에서 발생할 수 있는 모든 예외는 `InternalServerErrorException`을 통해 처리되고, 적절한 오류 메시지가 사용자에게 반환됩니다.
    - **시스템 로그 기록**: `logger`를 사용하여 모든 중요한 이벤트와 예외가 시스템 로그에 기록됩니다. 이는 디버깅과 문제 해결에 도움이 됩니다.
