@@ -107,15 +107,10 @@ export class WalletsRepository {
     amount: number,
   ): Promise<void> {
     try {
-      const coin = await transactionalEntityManager.findOne(Coin, {
-        where: { userId },
-        lock: { mode: 'pessimistic_write' }, // 락을 걸어 동시성 문제 해결
-      });
-      if (!coin) {
-        throw new NotFoundException(
-          `사용자의 코인 잔액 정보를 찾을 수 없습니다. userId: ${userId}`,
-        );
-      }
+      const coin = await this.findAndLockCoin(
+        transactionalEntityManager,
+        userId,
+      );
 
       const updatedBalance = coin.balance + amount;
       if (updatedBalance < 0) {
@@ -128,6 +123,24 @@ export class WalletsRepository {
       console.error('updateCoinBalance 오류 발생:', error);
       throw new InternalServerErrorException('코인 잔액 업데이트 중 오류 발생');
     }
+  }
+
+  private async findAndLockCoin(
+    transactionalEntityManager: EntityManager,
+    userId: number,
+  ): Promise<Coin> {
+    const coin = await transactionalEntityManager.findOne(Coin, {
+      where: { userId },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    if (!coin) {
+      throw new NotFoundException(
+        `사용자의 코인 잔액 정보를 찾을 수 없습니다. userId: ${userId}`,
+      );
+    }
+
+    return coin;
   }
 
   private async createCoinLog(
