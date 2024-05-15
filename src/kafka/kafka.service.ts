@@ -15,7 +15,7 @@ import { WalletsService } from 'src/wallet/wallets.service';
 export class KafkaService implements OnModuleInit, OnModuleDestroy {
   private kafka: Kafka;
   private producer: Producer;
-  private consumer: Consumer;
+  private consumers: Consumer[] = [];
 
   constructor(
     private configService: ConfigService,
@@ -30,35 +30,53 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
     this.producer = this.kafka.producer({
       createPartitioner: Partitioners.DefaultPartitioner,
     });
-    this.consumer = this.kafka.consumer({
-      groupId: this.configService.get('KAFKA_CONSUMER_GROUP_ID'),
+  }
+
+  private async setupConsumer(
+    groupId: string,
+    topic: string,
+    messageHandler: (payload: any) => Promise<void>,
+  ) {
+    const consumer = this.kafka.consumer({ groupId });
+    await consumer.connect();
+    await consumer.subscribe({ topic });
+
+    consumer.run({
+      eachMessage: async ({ topic, partition, message }) => {
+        try {
+          const payload = JSON.parse(message.value.toString());
+          await messageHandler(payload);
+        } catch (error) {
+          console.error(`메시지 처리 실패: ${error.message}`, {
+            topic,
+            partition,
+          });
+        }
+      },
     });
+
+    this.consumers.push(consumer);
   }
 
   async onModuleInit() {
     try {
       await this.producer.connect();
-      await this.consumer.connect();
-      await this.consumer.subscribe({ topic: 'transaction-status' });
-      await this.consumer.subscribe({ topic: 'transaction-queue' });
 
-      this.consumer.run({
-        eachMessage: async ({ topic, partition, message }) => {
-          try {
-            const payload = JSON.parse(message.value.toString());
-            if (topic === 'transaction-status') {
-              await this.walletsService.handleTransactionMessage(payload);
-            } else if (topic === 'transaction-queue') {
-              await this.walletsService.processTransaction(payload);
-            }
-          } catch (error) {
-            console.error(`메시지 처리 실패: ${error.message}`, {
-              topic,
-              partition,
-            });
-          }
+      await this.setupConsumer(
+        'transaction-status-group',
+        'transaction-status',
+        async (payload) => {
+          await this.walletsService.handleTransactionMessage(payload);
         },
-      });
+      );
+
+      await this.setupConsumer(
+        'transaction-queue-group',
+        'transaction-queue',
+        async (payload) => {
+          await this.walletsService.processTransaction(payload);
+        },
+      );
     } catch (error) {
       console.error('Kafka 클라이언트 초기화 중 오류 발생:', error);
     }
@@ -66,7 +84,9 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy() {
     try {
-      await this.consumer.disconnect();
+      for (const consumer of this.consumers) {
+        await consumer.disconnect();
+      }
       await this.producer.disconnect();
     } catch (error) {
       console.error('Kafka 연결 해제 중 오류 발생:', error);
