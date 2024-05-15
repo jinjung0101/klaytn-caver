@@ -6,7 +6,8 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { Kafka, Producer, Consumer, Partitioners } from 'kafkajs';
-import { Transport, KafkaOptions } from '@nestjs/microservices';
+import { getKafkaOptions } from './kafka.options';
+import { KafkaOptions } from '@nestjs/microservices';
 import { ConfigService } from '@nestjs/config';
 import { WalletsService } from 'src/wallet/wallets.service';
 import { MockCaver } from 'src/utils/mocking-caver.utils';
@@ -111,16 +112,6 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
   }
 
   getMicroserviceOptions(): KafkaOptions {
-    return {
-      transport: Transport.KAFKA,
-      options: {
-        client: {
-          brokers: [this.configService.get('KAFKA_BROKER')],
-        },
-        consumer: {
-          groupId: this.configService.get('KAFKA_CONSUMER_GROUP_ID'),
-        },
-      },
-    };
+    return getKafkaOptions(this.configService);
   }
 }
