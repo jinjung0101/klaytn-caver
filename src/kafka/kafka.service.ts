@@ -46,38 +46,31 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
         eachMessage: async ({ topic, partition, message }) => {
           try {
             const payload = JSON.parse(message.value.toString());
-            const retryCount = payload.retryCount || 0;
-            const delay = 3000 * (retryCount + 1); // 점진적 백오프 적용, 3초 단위로 증가
+            const transactionStatus = await MockCaver.getTransaction(
+              payload.transactionHash,
+            );
 
-            setTimeout(async () => {
-              const transactionStatus = await MockCaver.getTransaction(
-                payload.transactionHash,
-              );
-              switch (transactionStatus.status) {
-                case 'Committed':
-                  // 트랜잭션이 완료되었을 때 필요한 작업 수행
-                  await this.walletsService.transactionCompletion({
-                    ...payload.dto,
-                    status: 'Committed',
-                    transactionHash: payload.transactionHash,
-                  });
-                  break;
-                case 'CommitError':
-                  // 트랜잭션이 실패했을 때 오류 처리
-                  await this.walletsService.transactionError(
-                    payload.status,
-                    payload.transactionHash,
-                  );
-                  break;
-                case 'Submitted':
-                  // 재시도 횟수와 함께 메시지를 다시 큐에 추가
-                  this.sendMessage('transaction-status', {
-                    ...payload,
-                    retryCount: retryCount + 1,
-                  });
-                  break;
-              }
-            }, delay);
+            switch (transactionStatus.status) {
+              case 'Committed':
+                await this.walletsService.transactionCompletion({
+                  ...payload.dto,
+                  status: 'Committed',
+                  transactionHash: payload.transactionHash,
+                });
+                break;
+              case 'CommitError':
+                await this.walletsService.transactionError(
+                  payload.status,
+                  payload.transactionHash,
+                );
+                break;
+              case 'Submitted':
+                this.sendMessage('transaction-status', {
+                  ...payload,
+                  retryCount: (payload.retryCount || 0) + 1,
+                });
+                break;
+            }
           } catch (error) {
             console.error(`메시지 처리 실패: ${error.message}`, {
               topic,

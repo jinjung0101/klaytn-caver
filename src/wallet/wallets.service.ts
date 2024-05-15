@@ -106,14 +106,26 @@ export class WalletsService {
       );
     }
   }
-  // 재시도 로직 추가할 예정
   async transactionError(
     status: 'Submitted' | 'Committed' | 'CommitError',
     transactionHash: string,
   ) {
-    throw new BadRequestException(
-      `거래 실패했습니다. 거래 상태:${status}. 거래 Hash:${transactionHash}`,
-    );
+    try {
+      console.error(`트랜잭션 오류: 상태=${status}, 해시=${transactionHash}`);
+      await this.handlePostTransactionError(status, transactionHash);
+    } catch (error) {
+      throw new BadRequestException(
+        `거래 실패했습니다. 거래 상태:${status}. 거래 Hash:${transactionHash}`,
+      );
+    }
+  }
+
+  async handlePostTransactionError(
+    status: 'Submitted' | 'Committed' | 'CommitError',
+    transactionHash: string,
+  ) {
+    console.log(`트랜잭션 오류 후속 작업: ${transactionHash}`);
+    // 실패 알림 전송
   }
 
   async getUserCoinLogs(userId: number): Promise<CreateCoinLogDto[]> {

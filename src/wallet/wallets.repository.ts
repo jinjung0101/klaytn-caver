@@ -73,15 +73,6 @@ export class WalletsRepository {
     }
   }
 
-  async updateTransaction(transaction: Transaction): Promise<Transaction> {
-    try {
-      return this.transactionRepository.save(transaction);
-    } catch (error) {
-      console.error('updateTransaction 오류 발생:', error);
-      throw new InternalServerErrorException('트랜잭션 업데이트 중 오류 발생');
-    }
-  }
-
   private async updateAccountBalances(
     queryRunner: QueryRunner,
     userId: number,
@@ -118,6 +109,7 @@ export class WalletsRepository {
     try {
       const coin = await transactionalEntityManager.findOne(Coin, {
         where: { userId },
+        lock: { mode: 'pessimistic_write' }, // 락을 걸어 동시성 문제 해결
       });
       if (!coin) {
         throw new NotFoundException(
