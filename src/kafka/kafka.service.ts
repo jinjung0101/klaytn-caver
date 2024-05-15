@@ -10,7 +10,6 @@ import { getKafkaOptions } from './kafka.options';
 import { KafkaOptions } from '@nestjs/microservices';
 import { ConfigService } from '@nestjs/config';
 import { WalletsService } from 'src/wallet/wallets.service';
-import { MockCaver } from 'src/utils/mocking-caver.utils';
 
 @Injectable()
 export class KafkaService implements OnModuleInit, OnModuleDestroy {
@@ -46,31 +45,7 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
         eachMessage: async ({ topic, partition, message }) => {
           try {
             const payload = JSON.parse(message.value.toString());
-            const transactionStatus = await MockCaver.getTransaction(
-              payload.transactionHash,
-            );
-
-            switch (transactionStatus.status) {
-              case 'Committed':
-                await this.walletsService.transactionCompletion({
-                  ...payload.dto,
-                  status: 'Committed',
-                  transactionHash: payload.transactionHash,
-                });
-                break;
-              case 'CommitError':
-                await this.walletsService.transactionError(
-                  payload.status,
-                  payload.transactionHash,
-                );
-                break;
-              case 'Submitted':
-                this.sendMessage('transaction-status', {
-                  ...payload,
-                  retryCount: (payload.retryCount || 0) + 1,
-                });
-                break;
-            }
+            await this.walletsService.handleTransactionMessage(payload);
           } catch (error) {
             console.error(`메시지 처리 실패: ${error.message}`, {
               topic,

@@ -9,6 +9,13 @@ import { CreateCoinLogDto } from './dto/create-coin-log.dto';
 import { WalletsRepository } from './wallets.repository';
 import { MockCaver } from 'src/utils/mocking-caver.utils';
 
+interface TransactionPayload {
+  transactionHash: string;
+  status: 'Submitted' | 'Committed' | 'CommitError';
+  dto: CreateTransactionDto;
+  retryCount?: number;
+}
+
 @Injectable()
 export class WalletsService {
   constructor(
@@ -50,24 +57,12 @@ export class WalletsService {
   ): Promise<CreateTransactionDto> {
     try {
       const { status, transactionHash } = await this.mockCaverTransaction(dto);
-
-      if (status === 'Committed') {
-        await this.transactionCompletion({
-          ...dto,
-          status,
-          transactionHash,
-        });
-      } else if (status === 'Submitted') {
-        await this.kafkaService.sendMessage('transaction-status', {
-          transactionHash,
-          status,
-          dto,
-          retryCount: 0,
-        });
-      } else if (status === 'CommitError') {
-        await this.transactionError(status, transactionHash);
-      }
-
+      await this.handleTransactionStatus({
+        transactionHash,
+        status,
+        dto,
+        retryCount: 0,
+      });
       return { ...dto, status, transactionHash };
     } catch (error) {
       console.error('handleBlockchainTransaction 오류 발생:', error);
@@ -88,6 +83,21 @@ export class WalletsService {
     );
   }
 
+  async handleTransactionStatus(payload: TransactionPayload) {
+    const { status, dto, transactionHash, retryCount } = payload;
+    switch (status) {
+      case 'Committed':
+        await this.transactionCompletion(dto);
+        break;
+      case 'CommitError':
+        await this.transactionError(status, transactionHash);
+        break;
+      case 'Submitted':
+        await this.handleSubmittedStatus(payload);
+        break;
+    }
+  }
+
   async transactionCompletion(dto: CreateTransactionDto) {
     try {
       const existingTransaction =
@@ -106,6 +116,7 @@ export class WalletsService {
       );
     }
   }
+
   async transactionError(
     status: 'Submitted' | 'Committed' | 'CommitError',
     transactionHash: string,
@@ -137,5 +148,27 @@ export class WalletsService {
         '코인 로그 조회 중 오류가 발생하였습니다.',
       );
     }
+  }
+
+  async handleTransactionMessage(payload: TransactionPayload) {
+    const transactionStatus = await MockCaver.getTransaction(
+      payload.transactionHash,
+    );
+
+    await this.handleTransactionStatus({
+      ...payload,
+      status: transactionStatus.status as
+        | 'Submitted'
+        | 'Committed'
+        | 'CommitError',
+    });
+  }
+
+  async handleSubmittedStatus(payload: TransactionPayload) {
+    const retryCount = (payload.retryCount || 0) + 1;
+    await this.kafkaService.sendMessage('transaction-status', {
+      ...payload,
+      retryCount,
+    });
   }
 }
